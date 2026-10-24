@@ -1,0 +1,768 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tsurumi Stones</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#f3ecff; --panel:rgba(44,34,64,.66); --line:rgba(200,170,255,.28);
+  --accent:#b088ff; --accent2:#e6d2ff;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;overflow:hidden;background:#d4c19b;
+  font-family:"Zen Kaku Gothic New",system-ui,sans-serif;color:var(--ink);
+  -webkit-user-select:none;user-select:none}
+#board{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+
+/* ---------- HUD ---------- */
+.bar{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:5;
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;
+  padding:8px 10px;max-width:calc(100% - 24px);
+  background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 30px rgba(30,20,50,.25)}
+.brand{font-family:"Shippori Mincho",serif;font-weight:800;letter-spacing:.06em;padding:0 6px;
+  color:var(--accent2);text-shadow:0 0 10px rgba(176,136,255,.8)}
+.seg{display:flex;background:rgba(0,0,0,.25);border-radius:11px;padding:3px}
+.actions{display:flex;gap:6px}
+button{font:inherit;font-size:14px;color:var(--ink);background:rgba(255,255,255,.08);
+  border:1px solid var(--line);border-radius:10px;padding:6px 12px;cursor:pointer;transition:background .15s}
+button:hover:not(:disabled){background:rgba(176,136,255,.25)}
+button:disabled{opacity:.4;cursor:default}
+.seg button{border:none;background:transparent;padding:6px 14px;font-size:13px;letter-spacing:.1em;font-weight:700}
+.seg button.on{background:var(--accent);color:#1d1430;box-shadow:0 0 14px rgba(176,136,255,.65)}
+.status{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:5;
+  display:flex;gap:10px;align-items:center;max-width:calc(100% - 24px);
+  padding:8px 14px;background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border:1px solid var(--line);border-radius:14px;font-size:14px}
+.status .counts{white-space:nowrap;color:var(--accent2);font-weight:700;padding-left:10px;border-left:1px solid var(--line)}
+.help{position:fixed;top:76px;right:12px;z-index:6;width:min(330px,calc(100% - 24px));
+  padding:14px 16px;background:var(--panel);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--line);border-radius:14px;font-size:13.5px;line-height:1.5}
+.help h3{margin:4px 0 4px;font-family:"Shippori Mincho",serif;color:var(--accent2);font-size:15px;letter-spacing:.08em}
+.help ul{margin:0 0 8px;padding-left:18px}
+.win{position:fixed;inset:0;z-index:10;display:grid;place-items:center;background:rgba(30,20,50,.35)}
+.win .card{text-align:center;padding:26px 34px;background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid var(--line);border-radius:20px;box-shadow:0 0 60px rgba(176,136,255,.45)}
+.win .kanji{font-family:"Shippori Mincho",serif;font-size:64px;font-weight:800;color:#f1e4ff;
+  text-shadow:0 0 18px #b47bff,0 0 40px #8f55ff;animation:breathe 2.6s ease-in-out infinite}
+.win h2{margin:6px 0 4px;font-family:"Shippori Mincho",serif;letter-spacing:.08em}
+.win p{margin:0 0 16px;opacity:.85}
+.win .row{display:flex;gap:10px;justify-content:center}
+
+/* ---------- Board ---------- */
+.wave{fill:none;stroke:#fff;stroke-width:1.4;opacity:.22}
+.w0{animation:drift 9s ease-in-out infinite alternate}
+.w1{animation:drift 12s ease-in-out infinite alternate-reverse}
+.w2{animation:drift 15s ease-in-out infinite alternate}
+.foam{fill:none;stroke:#fff;stroke-width:2.5;opacity:.55;animation:drift 7s ease-in-out infinite alternate}
+.mist{fill:#fff;opacity:.16;filter:url(#blurBig);animation:drift2 40s ease-in-out infinite alternate}
+@keyframes drift{from{transform:translateX(-18px)}to{transform:translateX(18px)}}
+.flutter{transform-box:fill-box;transform-origin:15% 50%;animation:flutter 4.5s ease-in-out infinite}
+@keyframes flutter{0%,100%{transform:rotate(-2deg)}50%{transform:rotate(3deg)}}
+@keyframes drift2{from{transform:translateX(-80px)}to{transform:translateX(80px)}}
+
+.edge{stroke:#7f6a50;stroke-width:7;stroke-linecap:round}
+.rope{stroke:#dcc8a2;stroke-width:2.5;stroke-dasharray:3 7;stroke-linecap:round}
+.node{cursor:pointer}
+.node .disc{fill:#ece2ca;stroke:#a8916b;stroke-width:3}
+.node .inner{fill:#d7c7a5}
+.node .halo{fill:none;stroke:transparent;stroke-width:3}
+.node.istarget .disc{stroke:#9b72e0}
+.node.sel .halo{stroke:#b088ff}
+.node.start .halo{stroke:#d9c2ff;animation:pulse 1.1s ease-in-out infinite}
+.node.valid .halo{stroke:#d9c2ff;stroke-dasharray:6 6;filter:url(#glow);animation:pulse 1.4s ease-in-out infinite}
+.pickmode .node:hover .halo,.linkmode .node:hover .halo{stroke:#e6d2ff}
+.target text{font-family:"Shippori Mincho",serif;font-size:24px;font-weight:800;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.target .t{fill:#9a6fe6}
+.target .tglow{fill:#c9a6ff;filter:url(#glow);opacity:.55}
+.target.lit .tglow{opacity:1}
+
+.stone{transition:transform .22s cubic-bezier(.3,.7,.3,1);cursor:grab}
+body.dragging .stone.held{transition:none;cursor:grabbing}
+.stone .shadow{fill:rgba(60,45,30,.3);transition:transform .2s}
+.stone.held .shadow{transform:translate(6px,10px);opacity:.6}
+.stone .rock{fill:url(#rockGrad);stroke:#55505c;stroke-width:1.5}
+.stone .hi{fill:none;stroke:rgba(255,255,255,.4);stroke-width:2.5;stroke-linecap:round}
+.stone .speck{fill:#5f5a66;opacity:.35}
+.stone text{font-family:"Shippori Mincho",serif;font-size:30px;font-weight:800;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.stone .letter{fill:#5b3d86;opacity:.9;transition:fill .3s}
+.stone .lglow{fill:#b47bff;filter:url(#glowStrong);opacity:0;transition:opacity .3s}
+.stone.lit .letter{fill:#f6ecff}
+.stone.lit .lglow{opacity:1;animation:breathe 2.6s ease-in-out infinite}
+.stone.sel .rock,.stone.picking .rock{stroke:#d9c2ff;stroke-width:3}
+.stone.picking .rock{animation:pulse 1.1s ease-in-out infinite}
+.guide{stroke:#c9a6ff;stroke-width:2.5;stroke-dasharray:6 7;fill:none;opacity:.85;pointer-events:none}
+@keyframes pulse{50%{opacity:.35}}
+@keyframes breathe{0%,100%{opacity:.7}50%{opacity:1}}
+@media (max-width:600px){.brand{display:none}.status{font-size:12.5px}}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">Tsurumi Stones</div>
+  <div class="seg"><button id="modeConfig" class="on">CONFIG</button><button id="modeSolve">SOLVE</button></div>
+  <div class="actions" id="cfgActions">
+    <button id="btnDelete" title="Delete selected (Del)">Delete</button>
+    <button id="btnClear">Clear</button>
+  </div>
+  <div class="actions" id="solveActions" hidden>
+    <button id="btnUndo" title="Undo (Ctrl+Z)">Undo</button>
+    <button id="btnReset">Reset</button>
+  </div>
+  <button id="btnShare">Share link</button>
+  <button id="btnHelp" title="Controls">?</button>
+</header>
+
+<div class="help" id="help" hidden>
+  <h3>CONFIG</h3>
+  <ul>
+    <li>Double-click empty space: add node</li>
+    <li>Double-click node: add stone</li>
+    <li>Double-click stone, then click a node: set target</li>
+    <li>Drag stone: move it to another node</li>
+    <li>Drag empty node: move node</li>
+    <li>Right-click two nodes: link / unlink</li>
+    <li>Click, then Delete key: remove</li>
+  </ul>
+  <h3>SOLVE</h3>
+  <ul>
+    <li>Drag a stone to an empty, linked node</li>
+    <li>Or click a stone, then click the node</li>
+    <li>Ctrl+Z: undo</li>
+  </ul>
+</div>
+
+<div class="status"><span id="hint"></span><span class="counts" id="counts"></span></div>
+
+<div class="win" id="win" hidden>
+  <div class="card">
+    <div class="kanji">解</div>
+    <h2>Puzzle solved</h2>
+    <p id="winText"></p>
+    <div class="row"><button id="winReset">Play again</button><button id="winClose">Close</button></div>
+  </div>
+</div>
+
+<svg id="board" viewBox="0 0 1200 750" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sky" gradientUnits="userSpaceOnUse" x1="0" y1="-250" x2="0" y2="205">
+      <stop offset="0" stop-color="#3f3859"/><stop offset=".6" stop-color="#8a82a2"/><stop offset="1" stop-color="#d4c8d2"/>
+    </linearGradient>
+    <linearGradient id="sea" gradientUnits="userSpaceOnUse" x1="0" y1="200" x2="0" y2="320">
+      <stop offset="0" stop-color="#a3a8bf"/><stop offset=".5" stop-color="#8098aa"/><stop offset="1" stop-color="#94b3b3"/>
+    </linearGradient>
+    <linearGradient id="sand" gradientUnits="userSpaceOnUse" x1="0" y1="300" x2="0" y2="800">
+      <stop offset="0" stop-color="#e6d8b9"/><stop offset=".5" stop-color="#d9c7a1"/><stop offset="1" stop-color="#cbb68c"/>
+    </linearGradient>
+    <radialGradient id="vignette" cx=".5" cy=".55" r=".75">
+      <stop offset=".6" stop-color="#2a1f40" stop-opacity="0"/><stop offset="1" stop-color="#2a1f40" stop-opacity=".28"/>
+    </radialGradient>
+    <radialGradient id="rockGrad" cx=".36" cy=".3" r=".8">
+      <stop offset="0" stop-color="#d3d1d6"/><stop offset=".45" stop-color="#9c99a2"/><stop offset="1" stop-color="#5e5a66"/>
+    </radialGradient>
+    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="3.5"/></filter>
+    <filter id="glowStrong" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="blurBig" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="30"/></filter>
+    <filter id="blurMid" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="12"/></filter>
+    <g id="torii">
+      <rect x="616" y="174" width="7" height="68" rx="1"/>
+      <rect x="657" y="174" width="7" height="68" rx="1"/>
+      <path d="M598,170 Q640,178 682,170 L684,164 Q640,171 596,164 Z"/>
+      <rect x="606" y="182" width="68" height="5"/>
+      <rect x="637" y="172" width="6" height="11"/>
+    </g>
+    <linearGradient id="conchGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9cc6f0"/><stop offset=".55" stop-color="#4f86c9"/><stop offset="1" stop-color="#2a4f8a"/>
+    </linearGradient>
+    <linearGradient id="featherGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5a2f9e"/><stop offset=".6" stop-color="#9a6cf0"/><stop offset="1" stop-color="#d8c2ff"/>
+    </linearGradient>
+    <linearGradient id="woodGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b5a691"/><stop offset="1" stop-color="#7e6f5e"/>
+    </linearGradient>
+    <g id="conch">
+      <ellipse cx="2" cy="10" rx="24" ry="5" fill="rgba(60,45,30,.25)"/>
+      <path d="M-20,4 C-22,-6 -12,-14 0,-13 C10,-12 18,-7 22,-2 L14,2 C10,8 0,12 -10,11 C-16,10 -19,8 -20,4 Z" fill="url(#conchGrad)" stroke="#24467d" stroke-width="1"/>
+      <path d="M14,-7 L27,-3 L15,2 Z" fill="#355f9e" stroke="#24467d" stroke-width="1"/>
+      <path d="M-4,-12 C-2,-4 -2,4 -6,10 M6,-11 C8,-4 8,2 5,8 M14,-6 C15,-2 14,1 12,4" fill="none" stroke="#d5e8fb" stroke-width="1.2" opacity=".7"/>
+      <circle cx="-7" cy="-13" r="1.7" fill="#d5e8fb"/><circle cx="3" cy="-12.5" r="1.7" fill="#d5e8fb"/><circle cx="11" cy="-9" r="1.5" fill="#d5e8fb"/>
+      <path d="M-20,4 C-16,-1 -8,0 -2,4 C-6,9 -14,10 -20,4 Z" fill="#f4dde8"/>
+    </g>
+    <g id="feather">
+      <path d="M-34,0 C-20,-11 10,-12 34,-2 C10,6 -20,8 -34,0 Z" fill="#b47bff" filter="url(#glow)" opacity=".45"/>
+      <path d="M-34,0 C-20,-11 10,-12 34,-2 C10,6 -20,8 -34,0 Z" fill="url(#featherGrad)"/>
+      <path d="M-20,-1 L-14,-8 M-8,-1 L-2,-9 M4,-1 L10,-9 M16,-1 L21,-6 M-14,0 L-9,5 M-2,0 L3,5 M10,-1 L15,3" stroke="rgba(255,255,255,.35)" stroke-width="1"/>
+      <path d="M-46,2 L36,-2" stroke="#efe4ff" stroke-width="1.5" stroke-linecap="round"/>
+    </g>
+    <g id="driftwood">
+      <ellipse cx="0" cy="14" rx="96" ry="7" fill="rgba(60,45,30,.22)"/>
+      <path d="M30,-4 C42,-16 52,-24 66,-30 L69,-26 C57,-19 47,-11 39,-1 Z" fill="url(#woodGrad)" stroke="#5f5346" stroke-width="1.2"/>
+      <path d="M-92,6 C-60,-3 -20,-6 20,-5 C50,-4 75,-9 96,-15 L99,-8 C78,1 52,6 20,7 C-20,8 -60,13 -93,14 Z" fill="url(#woodGrad)" stroke="#5f5346" stroke-width="1.4"/>
+      <path d="M-74,8 C-36,3 6,1 62,-4 M-50,10 C-10,6 30,4 80,-5" fill="none" stroke="#6d6052" stroke-width="1" opacity=".55"/>
+      <ellipse cx="-30" cy="5" rx="4" ry="2.5" fill="none" stroke="#5f5346" stroke-width="1"/>
+    </g>
+  </defs>
+
+  <g id="bg" pointer-events="none">
+    <rect x="-3000" y="-2500" width="7200" height="2705" fill="url(#sky)"/>
+    <circle cx="890" cy="110" r="120" fill="#f4e9f0" opacity=".22" filter="url(#blurMid)"/>
+    <circle cx="890" cy="110" r="40" fill="#f6eef3" opacity=".75"/>
+    <path d="M-3000,200 L-3000,190 C-400,190 -100,185 40,186 C120,168 170,148 230,158 C290,138 340,148 400,172 C450,184 500,192 560,200 Z" fill="#7a7194" opacity=".7"/>
+    <path d="M740,200 C820,182 870,164 930,171 C1000,148 1060,158 1120,176 C1300,190 2000,192 4200,192 L4200,200 Z" fill="#665e83" opacity=".75"/>
+    <rect x="-3000" y="200" width="7200" height="120" fill="url(#sea)"/>
+    <g fill="#6b3a52" opacity=".55"><use href="#torii"/></g>
+    <g fill="#6b3a52" opacity=".14"><use href="#torii" transform="translate(0,484) scale(1,-1)"/></g>
+    <g id="waves"></g>
+    <rect x="-3000" y="304" width="7200" height="2800" fill="url(#sand)"/>
+    <path id="wet" fill="#bfae8c" opacity=".45"></path>
+    <path id="foam" class="foam"></path>
+    <g id="speckles"></g>
+    <g id="decor">
+      <use href="#driftwood" transform="translate(170,660) rotate(-9)"/>
+      <use href="#driftwood" transform="translate(1050,420) rotate(14) scale(.7)"/>
+      <use href="#conch" transform="translate(275,560) rotate(-20) scale(1.25)"/>
+      <use href="#conch" transform="translate(985,690) rotate(28)"/>
+      <use href="#conch" transform="translate(110,425) rotate(8) scale(.8)"/>
+      <use href="#conch" transform="translate(880,470) rotate(-35) scale(.9)"/>
+      <g transform="translate(345,700) rotate(-24)"><g class="flutter"><use href="#feather"/></g></g>
+      <g transform="translate(1110,575) rotate(38) scale(.8)"><g class="flutter" style="animation-delay:-2s"><use href="#feather"/></g></g>
+      <g transform="translate(380,395) rotate(12) scale(.6)"><g class="flutter" style="animation-delay:-1s"><use href="#feather"/></g></g>
+    </g>
+    <g id="mists"></g>
+    <rect x="-3000" y="-2500" width="7200" height="5600" fill="url(#vignette)"/>
+  </g>
+  <g id="edges"></g>
+  <g id="nodes"></g>
+  <g id="targets"></g>
+  <g id="overlay" pointer-events="none"></g>
+  <g id="stones"></g>
+</svg>
+
+<script>
+"use strict";
+const SVGNS = "http://www.w3.org/2000/svg";
+const NODE_R = 22, HIT_NODE = 30, HIT_STONE = 32, SNAP = 48;
+const STORE_KEY = "tsurumi-stones-v1";
+const $ = id => document.getElementById(id);
+const svg = $("board");
+const edgesG = $("edges"), nodesG = $("nodes"), targetsG = $("targets"), stonesG = $("stones"), overlayG = $("overlay");
+
+/* ---------- State ---------- */
+let state = { nodes: [], edges: [], stones: [], nextId: 1 };
+let mode = "config";
+let selected = null;     // {kind:'node'|'stone', id}
+let picking = null;      // stone letter waiting for target
+let edgeStart = null;    // node id waiting for second right-click
+let drag = null;
+let lastDown = null;
+let initial = null;      // letter -> node at SOLVE start
+let history = [];
+let pointer = { x: 0, y: 0 };
+let flashMsg = null, flashTimer = null;
+let winShown = false;
+
+/* ---------- Helpers ---------- */
+const nodeById = id => state.nodes.find(n => n.id === id);
+const stoneAt = id => state.stones.find(s => s.node === id);
+const stoneByL = l => state.stones.find(s => s.l === l);
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const hasEdge = (a, b) => state.edges.some(([p, q]) => (p === a && q === b) || (p === b && q === a));
+const neighbours = id => state.edges.flatMap(([p, q]) => p === id ? [q] : q === id ? [p] : []);
+const isLit = s => s.target != null && s.node === s.target;
+const sameHit = (a, b) => a.kind === b.kind && a.id === b.id;
+
+function toSvg(e) {
+  return new DOMPoint(e.clientX, e.clientY).matrixTransform(svg.getScreenCTM().inverse());
+}
+function hitTest(p) {
+  let best = null, bd = Infinity;
+  for (const s of state.stones) {
+    const d = dist(p, nodeById(s.node));
+    if (d < HIT_STONE && d < bd) { best = { kind: "stone", id: s.l }; bd = d; }
+  }
+  if (best) return best;
+  for (const n of state.nodes) {
+    const d = dist(p, n);
+    if (d < HIT_NODE && d < bd) { best = { kind: "node", id: n.id }; bd = d; }
+  }
+  return best || { kind: "empty" };
+}
+function nodeNear(p, r = SNAP) {
+  let best = null, bd = r;
+  for (const n of state.nodes) { const d = dist(p, n); if (d < bd) { bd = d; best = n; } }
+  return best;
+}
+function hitNodeId(hit) {
+  if (hit.kind === "node") return hit.id;
+  if (hit.kind === "stone") return stoneByL(hit.id).node;
+  return null;
+}
+function nextLetter() {
+  for (let c = 65; c <= 90; c++) {
+    const l = String.fromCharCode(c);
+    if (!stoneByL(l)) return l;
+  }
+  return null;
+}
+function flash(msg) {
+  flashMsg = msg;
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { flashMsg = null; updateHud(); }, 2800);
+  updateHud();
+}
+function save() {
+  if (mode !== "config") return;
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+
+/* ---------- Background details ---------- */
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function buildBg() {
+  const r = rng(7);
+  let h = "";
+  for (let i = 0; i < 6; i++) {
+    const y = 214 + i * 16 + (i % 2) * 4;
+    let d = `M-1600,${y}`;
+    for (let x = -1600; x < 2800; x += 60) d += " q15,-3 30,0 t30,0";
+    h += `<path class="wave w${i % 3}" d="${d}" style="opacity:${0.12 + i * 0.03}"/>`;
+  }
+  $("waves").innerHTML = h;
+  let wet = "M-1600,300", foam = "M-1600,308";
+  for (let x = -1600; x < 2800; x += 80) { wet += " q20,10 40,0 t40,0"; foam += " q20,5 40,0 t40,0"; }
+  wet += " L2800,330 L-1600,330 Z";
+  $("wet").setAttribute("d", wet);
+  $("foam").setAttribute("d", foam);
+  h = "";
+  for (let i = 0; i < 520; i++) {
+    const x = -500 + r() * 2200, y = 320 + r() * 900, s = 0.6 + r() * 1.6;
+    h += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${s.toFixed(2)}" fill="${r() > .5 ? "#9c8763" : "#f4ead4"}" opacity="${(0.15 + r() * 0.25).toFixed(2)}"/>`;
+  }
+  for (let i = 0; i < 14; i++) {
+    const x = -200 + r() * 1600, y = 340 + r() * 560;
+    h += `<ellipse cx="${x.toFixed(0)}" cy="${y.toFixed(0)}" rx="${(3 + r() * 5).toFixed(1)}" ry="${(2 + r() * 3).toFixed(1)}" fill="#8f8a92" opacity=".55"/>`;
+  }
+  $("speckles").innerHTML = h;
+  $("mists").innerHTML =
+    `<ellipse class="mist" cx="300" cy="190" rx="420" ry="60"/>
+     <ellipse class="mist" cx="950" cy="230" rx="380" ry="50" style="animation-duration:55s"/>
+     <ellipse class="mist" cx="600" cy="120" rx="500" ry="70" style="animation-duration:70s;opacity:.1"/>`;
+}
+
+/* ---------- Rendering ---------- */
+const stoneEls = new Map();
+function stoneMarkup(l) {
+  const rot = (l.charCodeAt(0) * 37) % 30 - 15;
+  return `<ellipse class="shadow" cx="3" cy="17" rx="30" ry="10"/>
+    <g transform="rotate(${rot})">
+      <path class="rock" d="M-30,4 C-32,-14 -16,-28 2,-27 C20,-27 32,-15 31,1 C30,17 16,25 -1,25 C-18,25 -29,18 -30,4 Z"/>
+      <path class="hi" d="M-19,-13 C-13,-21 -1,-23 8,-21"/>
+      <circle class="speck" cx="16" cy="10" r="1.6"/><circle class="speck" cx="-18" cy="12" r="1.2"/><circle class="speck" cx="21" cy="-6" r="1"/>
+    </g>
+    <text class="lglow" y="1">${l}</text><text class="letter" y="1">${l}</text>`;
+}
+function activeStone() {
+  if (drag && drag.hit.kind === "stone") return stoneByL(drag.hit.id);
+  if (selected && selected.kind === "stone") return stoneByL(selected.id);
+  return null;
+}
+function render() {
+  svg.classList.toggle("pickmode", !!picking);
+  svg.classList.toggle("linkmode", edgeStart != null);
+  const active = activeStone();
+  const valid = new Set();
+  if (mode === "solve" && active) for (const nb of neighbours(active.node)) if (!stoneAt(nb)) valid.add(nb);
+  const targetNodes = new Set(state.stones.filter(s => s.target != null).map(s => s.target));
+
+  let h = "";
+  for (const [a, b] of state.edges) {
+    const A = nodeById(a), B = nodeById(b);
+    if (!A || !B) continue;
+    const c = `x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}"`;
+    h += `<line class="edge" ${c}/><line class="rope" ${c}/>`;
+  }
+  edgesG.innerHTML = h;
+
+  h = "";
+  for (const n of state.nodes) {
+    const c = ["node"];
+    if (selected && selected.kind === "node" && selected.id === n.id) c.push("sel");
+    if (edgeStart === n.id) c.push("start");
+    if (valid.has(n.id)) c.push("valid");
+    if (targetNodes.has(n.id)) c.push("istarget");
+    h += `<g class="${c.join(" ")}" transform="translate(${n.x} ${n.y})"><circle class="halo" r="33"/><circle class="disc" r="${NODE_R}"/><circle class="inner" r="8"/></g>`;
+  }
+  nodesG.innerHTML = h;
+
+  h = "";
+  for (const s of state.stones) {
+    if (s.target == null) continue;
+    const n = nodeById(s.target);
+    if (!n) continue;
+    h += `<g class="target${isLit(s) ? " lit" : ""}" transform="translate(${n.x + 36} ${n.y - 34})"><text class="tglow">${s.l}</text><text class="t">${s.l}</text></g>`;
+  }
+  targetsG.innerHTML = h;
+
+  renderStones();
+  renderOverlay();
+  updateHud();
+}
+function renderStones() {
+  const seen = new Set();
+  for (const s of state.stones) {
+    seen.add(s.l);
+    let g = stoneEls.get(s.l);
+    const n = nodeById(s.node);
+    const held = drag && drag.moved && drag.hit.kind === "stone" && drag.hit.id === s.l;
+    const pos = held ? drag.pos : n;
+    if (!g) {
+      g = document.createElementNS(SVGNS, "g");
+      g.innerHTML = stoneMarkup(s.l);
+      g.style.transition = "none";
+      g.style.transform = `translate(${pos.x}px,${pos.y}px)`;
+      stonesG.appendChild(g);
+      stoneEls.set(s.l, g);
+      g.getBoundingClientRect();
+      g.style.transition = "";
+    }
+    g.style.transform = `translate(${pos.x}px,${pos.y}px)`;
+    const c = ["stone"];
+    if (isLit(s)) c.push("lit");
+    if (selected && selected.kind === "stone" && selected.id === s.l) c.push("sel");
+    if (held) c.push("held");
+    if (picking === s.l) c.push("picking");
+    g.setAttribute("class", c.join(" "));
+  }
+  for (const [l, g] of stoneEls) if (!seen.has(l)) { g.remove(); stoneEls.delete(l); }
+}
+function renderOverlay() {
+  let h = "";
+  if (mode === "config") {
+    if (edgeStart != null) {
+      const a = nodeById(edgeStart);
+      if (a) h += `<line class="guide" x1="${a.x}" y1="${a.y}" x2="${pointer.x}" y2="${pointer.y}"/>`;
+    }
+    if (picking) {
+      const a = nodeById(stoneByL(picking).node);
+      h += `<line class="guide" x1="${a.x}" y1="${a.y}" x2="${pointer.x}" y2="${pointer.y}"/>`;
+    } else if (selected && selected.kind === "stone") {
+      const s = stoneByL(selected.id);
+      if (s && s.target != null && s.target !== s.node) {
+        const a = nodeById(s.node), b = nodeById(s.target);
+        h += `<line class="guide" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" style="opacity:.5"/>`;
+      }
+    }
+  }
+  overlayG.innerHTML = h;
+}
+function contextHint() {
+  if (mode === "config") {
+    if (picking) return `Click a node to set the target for ${picking}. Esc cancels.`;
+    if (edgeStart != null) return "Right-click another node to link or unlink. Esc cancels.";
+    if (!state.nodes.length) return "Double-click empty space to add a node.";
+    return "Double-click to add nodes, stones and targets. Right-click two nodes to link them. Press ? for help.";
+  }
+  if (winShown) return "All stones are home.";
+  return "Slide a stone to an empty, linked node.";
+}
+function updateHud() {
+  $("modeConfig").classList.toggle("on", mode === "config");
+  $("modeSolve").classList.toggle("on", mode === "solve");
+  $("cfgActions").hidden = mode !== "config";
+  $("solveActions").hidden = mode !== "solve";
+  $("btnDelete").disabled = !selected;
+  $("btnUndo").disabled = !history.length;
+  const on = state.stones.filter(isLit).length;
+  $("counts").textContent = mode === "solve"
+    ? `Moves ${history.length} · Home ${on}/${state.stones.length}`
+    : `${state.nodes.length} nodes · ${state.stones.length} stones`;
+  $("hint").textContent = flashMsg || contextHint();
+}
+
+/* ---------- Actions ---------- */
+function onDouble(hit, p) {
+  if (hit.kind === "empty") {
+    const n = { id: state.nextId++, x: Math.round(p.x), y: Math.round(p.y) };
+    state.nodes.push(n);
+    selected = { kind: "node", id: n.id };
+  } else if (hit.kind === "node") {
+    const l = nextLetter();
+    if (!l) { flash("All 26 letters are in use."); return; }
+    state.stones.push({ l, node: hit.id, target: null });
+    selected = { kind: "stone", id: l };
+    flash(`Stone ${l} added. Double-click it to set its target.`);
+  } else if (hit.kind === "stone") {
+    picking = hit.id;
+    selected = hit;
+  }
+  save();
+  render();
+}
+function handlePick(hit) {
+  const nid = hitNodeId(hit);
+  const l = picking;
+  picking = null;
+  if (nid == null) { render(); return; }
+  const other = state.stones.find(s => s.l !== l && s.target === nid);
+  if (other) { flash(`That node is already the target of ${other.l}.`); render(); return; }
+  stoneByL(l).target = nid;
+  flash(`Target for ${l} set.`);
+  save();
+  render();
+}
+function toggleEdge(a, b) {
+  if (hasEdge(a, b)) state.edges = state.edges.filter(([p, q]) => !((p === a && q === b) || (p === b && q === a)));
+  else state.edges.push([a, b]);
+}
+function deleteSelected() {
+  if (!selected || mode !== "config") return;
+  if (selected.kind === "stone") {
+    state.stones = state.stones.filter(s => s.l !== selected.id);
+  } else {
+    const id = selected.id;
+    state.nodes = state.nodes.filter(n => n.id !== id);
+    state.edges = state.edges.filter(([a, b]) => a !== id && b !== id);
+    state.stones = state.stones.filter(s => s.node !== id);
+    for (const s of state.stones) if (s.target === id) s.target = null;
+  }
+  selected = null;
+  save();
+  render();
+}
+function tryMove(s, to) {
+  if (stoneAt(to)) { flash("That node is taken."); return false; }
+  if (!hasEdge(s.node, to)) { flash("Stones can only slide along a link to a neighbour."); return false; }
+  history.push({ l: s.l, from: s.node, to });
+  s.node = to;
+  selected = null;
+  checkWin();
+  return true;
+}
+function solved() { return state.stones.length > 0 && state.stones.every(isLit); }
+function checkWin() {
+  if (mode === "solve" && solved() && !winShown) {
+    winShown = true;
+    $("winText").textContent = `${history.length} move${history.length === 1 ? "" : "s"}.`;
+    setTimeout(() => { if (winShown) $("win").hidden = false; }, 450);
+  }
+}
+function setMode(m) {
+  if (m === mode) return;
+  if (m === "solve") {
+    if (!state.stones.length) { flash("Add some stones first."); return; }
+    const missing = state.stones.filter(s => s.target == null).map(s => s.l);
+    if (missing.length) { flash(`Set a target for: ${missing.join(", ")}. Double-click a stone to do it.`); return; }
+    save();
+    initial = Object.fromEntries(state.stones.map(s => [s.l, s.node]));
+    history = [];
+    mode = "solve";
+  } else {
+    if (initial) for (const s of state.stones) if (initial[s.l] != null) s.node = initial[s.l];
+    history = [];
+    mode = "config";
+  }
+  selected = null; picking = null; edgeStart = null; winShown = false;
+  $("win").hidden = true;
+  render();
+}
+function undo() {
+  const m = history.pop();
+  if (!m) return;
+  stoneByL(m.l).node = m.from;
+  winShown = false; $("win").hidden = true;
+  render();
+}
+function resetSolve() {
+  if (initial) for (const s of state.stones) s.node = initial[s.l];
+  history = []; selected = null; winShown = false;
+  $("win").hidden = true;
+  render();
+}
+
+/* ---------- Share link ---------- */
+function b64urlEncode(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = ""; bytes.forEach(b => bin += String.fromCharCode(b));
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function b64urlDecode(s) {
+  s = s.replace(/-/g, "+").replace(/_/g, "/");
+  while (s.length % 4) s += "=";
+  const bin = atob(s);
+  return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
+}
+function encodePuzzle() {
+  const idx = new Map(state.nodes.map((n, i) => [n.id, i]));
+  const start = s => (mode === "solve" && initial) ? initial[s.l] : s.node;
+  return b64urlEncode(JSON.stringify({
+    v: 1,
+    n: state.nodes.map(n => [Math.round(n.x), Math.round(n.y)]),
+    e: state.edges.map(([a, b]) => [idx.get(a), idx.get(b)]),
+    s: state.stones.map(s => [s.l, idx.get(start(s)), s.target == null ? -1 : idx.get(s.target)])
+  }));
+}
+function decodePuzzle(code) {
+  const o = JSON.parse(b64urlDecode(code));
+  const nodes = o.n.map(([x, y], i) => ({ id: i + 1, x, y }));
+  return {
+    nodes,
+    edges: o.e.map(([a, b]) => [a + 1, b + 1]),
+    stones: o.s.map(([l, n, t]) => ({ l, node: n + 1, target: t < 0 ? null : t + 1 })),
+    nextId: nodes.length + 1
+  };
+}
+async function share() {
+  if (!state.nodes.length) { flash("Build a puzzle first."); return; }
+  const url = location.href.split("#")[0] + "#p=" + encodePuzzle();
+  let ok = false;
+  try { await navigator.clipboard.writeText(url); ok = true; } catch (e) {}
+  if (!ok) window.prompt("Copy this link:", url);
+  if (location.protocol === "file:") flash("Link copied. It works for others after the page is online (e.g. GitHub Pages).");
+  else flash("Link copied. It opens this puzzle in SOLVE mode.");
+}
+
+/* ---------- Input ---------- */
+svg.addEventListener("pointerdown", e => {
+  if (e.button !== 0 || e.ctrlKey) return;
+  e.preventDefault();
+  const p = toSvg(e), hit = hitTest(p), now = performance.now();
+  const dbl = lastDown && now - lastDown.t < 380 && dist(p, lastDown.p) < 14 && sameHit(hit, lastDown.hit);
+  lastDown = dbl ? null : { t: now, p, hit };
+  if (mode === "config") {
+    if (picking) { handlePick(hit); lastDown = null; return; }
+    if (dbl) { onDouble(hit, p); return; }
+  }
+  if (hit.kind === "empty") {
+    selected = null;
+    if (mode === "config") edgeStart = null;
+    render();
+    return;
+  }
+  drag = { hit, start: p, pos: p, moved: false };
+  try { svg.setPointerCapture(e.pointerId); } catch (err) {}
+});
+svg.addEventListener("pointermove", e => {
+  const p = toSvg(e);
+  pointer = p;
+  if (!drag) { if (edgeStart != null || picking) renderOverlay(); return; }
+  if (!drag.moved) {
+    if (dist(p, drag.start) < 6) return;
+    if (drag.hit.kind === "node" && mode !== "config") return;
+    drag.moved = true;
+    document.body.classList.add("dragging");
+    if (drag.hit.kind === "stone") {
+      selected = drag.hit;
+      const g = stoneEls.get(drag.hit.id);
+      if (g) stonesG.appendChild(g);
+    }
+  }
+  drag.pos = p;
+  if (drag.hit.kind === "node") { const n = nodeById(drag.hit.id); n.x = Math.round(p.x); n.y = Math.round(p.y); }
+  render();
+});
+function endDrag(e) {
+  if (!drag) return;
+  const d = drag;
+  drag = null;
+  document.body.classList.remove("dragging");
+  const p = toSvg(e);
+  if (d.moved) {
+    if (d.hit.kind === "stone") {
+      const s = stoneByL(d.hit.id), tgt = nodeNear(p);
+      if (tgt && tgt.id !== s.node) {
+        if (mode === "config") {
+          if (stoneAt(tgt.id)) flash("That node already has a stone.");
+          else { s.node = tgt.id; save(); }
+        } else tryMove(s, tgt.id);
+      }
+      if (mode === "solve") selected = null;
+    } else if (d.hit.kind === "node") save();
+  } else if (mode === "config") {
+    selected = d.hit;
+  } else {
+    if (d.hit.kind === "stone") selected = (selected && selected.id === d.hit.id) ? null : d.hit;
+    else if (d.hit.kind === "node" && selected && selected.kind === "stone") tryMove(stoneByL(selected.id), d.hit.id);
+  }
+  render();
+}
+svg.addEventListener("pointerup", endDrag);
+svg.addEventListener("pointercancel", () => { drag = null; document.body.classList.remove("dragging"); render(); });
+svg.addEventListener("contextmenu", e => {
+  e.preventDefault();
+  if (mode !== "config") return;
+  const nid = hitNodeId(hitTest(toSvg(e)));
+  if (nid == null) edgeStart = null;
+  else if (edgeStart == null) edgeStart = nid;
+  else if (edgeStart === nid) edgeStart = null;
+  else { toggleEdge(edgeStart, nid); edgeStart = null; save(); }
+  render();
+});
+window.addEventListener("keydown", e => {
+  if (e.key === "Escape") { picking = null; edgeStart = null; selected = null; $("help").hidden = true; render(); }
+  else if ((e.key === "Delete" || e.key === "Backspace") && mode === "config") { e.preventDefault(); deleteSelected(); }
+  else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && mode === "solve") { e.preventDefault(); undo(); }
+  else if (e.key === "?") $("help").hidden = !$("help").hidden;
+});
+
+$("modeConfig").onclick = () => setMode("config");
+$("modeSolve").onclick = () => setMode("solve");
+$("btnDelete").onclick = deleteSelected;
+$("btnClear").onclick = () => {
+  if (!confirm("Clear the whole puzzle?")) return;
+  state = { nodes: [], edges: [], stones: [], nextId: 1 };
+  selected = picking = edgeStart = null;
+  save(); render();
+};
+$("btnUndo").onclick = undo;
+$("btnReset").onclick = resetSolve;
+$("btnShare").onclick = share;
+$("btnHelp").onclick = () => $("help").hidden = !$("help").hidden;
+$("winReset").onclick = resetSolve;
+$("winClose").onclick = () => $("win").hidden = true;
+
+/* ---------- Start ---------- */
+function demoPuzzle() {
+  const cx = 600, cy = 500, R = 150, nodes = [{ id: 1, x: cx, y: cy }];
+  [180, 240, 300, 0, 60, 120].forEach((a, i) => {
+    const t = a * Math.PI / 180;
+    nodes.push({ id: i + 2, x: Math.round(cx + R * Math.cos(t)), y: Math.round(cy + R * Math.sin(t)) });
+  });
+  return {
+    nodes,
+    edges: [[2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 2], [1, 2], [1, 5]],
+    stones: [{ l: "A", node: 3, target: 6 }, { l: "B", node: 4, target: 3 }, { l: "C", node: 6, target: 4 }],
+    nextId: 8
+  };
+}
+function boot() {
+  buildBg();
+  const m = location.hash.match(/^#p=(.+)$/);
+  if (m) {
+    try {
+      state = decodePuzzle(m[1]);
+      render();
+      setMode("solve");
+      flash("Shared puzzle loaded. Good luck!");
+      return;
+    } catch (e) { flash("That share link is broken."); }
+  }
+  let loaded = false;
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) { const s = JSON.parse(raw); if (s && Array.isArray(s.nodes)) { state = s; loaded = true; } }
+  } catch (e) {}
+  if (!loaded) { state = demoPuzzle(); flash("Demo puzzle loaded. Try SOLVE, or Clear to build your own."); }
+  render();
+}
+boot();
+</script>
+</body>
+</html>
