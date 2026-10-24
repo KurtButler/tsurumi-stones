@@ -33,6 +33,10 @@ button{font:inherit;font-size:14px;color:var(--ink);background:rgba(255,255,255,
   border:1px solid var(--line);border-radius:10px;padding:6px 12px;cursor:pointer;transition:background .15s}
 button:hover:not(:disabled){background:rgba(176,136,255,.25)}
 button:disabled{opacity:.4;cursor:default}
+select{font:inherit;font-size:14px;color:var(--ink);background:rgba(255,255,255,.08);
+  border:1px solid var(--line);border-radius:10px;padding:6px 10px;cursor:pointer}
+select:hover{background:rgba(176,136,255,.25)}
+select option{background:#2c2240;color:var(--ink)}
 .seg button{border:none;background:transparent;padding:6px 14px;font-size:13px;letter-spacing:.1em;font-weight:700}
 .seg button.on{background:var(--accent);color:#1d1430;box-shadow:0 0 14px rgba(176,136,255,.65)}
 .status{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);z-index:5;
@@ -95,7 +99,9 @@ body.dragging .stone.held{transition:none;cursor:grabbing}
 .stone.lit .letter{fill:#f6ecff}
 .stone.lit .lglow{opacity:1;animation:breathe 2.6s ease-in-out infinite}
 .stone.sel .rock,.stone.picking .rock{stroke:#d9c2ff;stroke-width:3}
-.stone.picking .rock{animation:pulse 1.1s ease-in-out infinite}
+.stone.picking .rock,.stone.hinted .rock{animation:pulse 1.1s ease-in-out infinite}
+.stone.hinted .rock{stroke:#e6d2ff;stroke-width:3.5}
+.guide.hint{stroke:#e6d2ff;stroke-width:3.5;filter:url(#glow);opacity:1}
 .guide{stroke:#c9a6ff;stroke-width:2.5;stroke-dasharray:6 7;fill:none;opacity:.85;pointer-events:none}
 @keyframes pulse{50%{opacity:.35}}
 @keyframes breathe{0%,100%{opacity:.7}50%{opacity:1}}
@@ -114,7 +120,10 @@ body.dragging .stone.held{transition:none;cursor:grabbing}
   <div class="actions" id="solveActions" hidden>
     <button id="btnUndo" title="Undo (Ctrl+Z)">Undo</button>
     <button id="btnReset">Reset</button>
+    <button id="btnHint" title="Show the next best move">Hint</button>
+    <button id="btnAuto" title="Let the computer solve it">Auto-solve</button>
   </div>
+  <select id="loadSel" title="Load a puzzle"><option value="">Load puzzle…</option></select>
   <button id="btnShare">Share link</button>
   <button id="btnHelp" title="Controls">?</button>
 </header>
@@ -127,7 +136,7 @@ body.dragging .stone.held{transition:none;cursor:grabbing}
     <li>Double-click stone, then click a node: set target</li>
     <li>Drag stone: move it to another node</li>
     <li>Drag empty node: move node</li>
-    <li>Right-click two nodes: link / unlink</li>
+    <li>Double-click a node, hold, and drag to another node: link / unlink</li>
     <li>Click, then Delete key: remove</li>
   </ul>
   <h3>SOLVE</h3>
@@ -135,6 +144,12 @@ body.dragging .stone.held{transition:none;cursor:grabbing}
     <li>Drag a stone to an empty, linked node</li>
     <li>Or click a stone, then click the node</li>
     <li>Ctrl+Z: undo</li>
+    <li>Hint: show the next best move</li>
+    <li>Auto-solve: the computer plays the shortest solution</li>
+  </ul>
+  <h3>BOTH</h3>
+  <ul>
+    <li>Load puzzle: pick one of the built-in puzzles</li>
   </ul>
 </div>
 
@@ -146,6 +161,14 @@ body.dragging .stone.held{transition:none;cursor:grabbing}
     <h2>Puzzle solved</h2>
     <p id="winText"></p>
     <div class="row"><button id="winReset">Play again</button><button id="winClose">Close</button></div>
+  </div>
+</div>
+
+<div class="win" id="dlg" hidden>
+  <div class="card" style="max-width:min(460px,calc(100vw - 32px))">
+    <p id="dlgText" style="margin:0 0 14px;opacity:1"></p>
+    <input id="dlgInput" readonly hidden style="width:100%;margin:0 0 14px;padding:8px 10px;font:inherit;font-size:13px;color:var(--ink);background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:8px;-webkit-user-select:all;user-select:all">
+    <div class="row"><button id="dlgOk">OK</button><button id="dlgCancel">Cancel</button></div>
   </div>
 </div>
 
@@ -230,12 +253,12 @@ body.dragging .stone.held{transition:none;cursor:grabbing}
       <use href="#driftwood" transform="translate(170,660) rotate(-9)"/>
       <use href="#driftwood" transform="translate(1050,420) rotate(14) scale(.7)"/>
       <use href="#conch" transform="translate(275,560) rotate(-20) scale(1.25)"/>
-      <use href="#conch" transform="translate(985,690) rotate(28)"/>
+      <use href="#conch" transform="translate(1130,700) rotate(28)"/>
       <use href="#conch" transform="translate(110,425) rotate(8) scale(.8)"/>
-      <use href="#conch" transform="translate(880,470) rotate(-35) scale(.9)"/>
+      <use href="#conch" transform="translate(970,625) rotate(-35) scale(.9)"/>
       <g transform="translate(345,700) rotate(-24)"><g class="flutter"><use href="#feather"/></g></g>
       <g transform="translate(1110,575) rotate(38) scale(.8)"><g class="flutter" style="animation-delay:-2s"><use href="#feather"/></g></g>
-      <g transform="translate(380,395) rotate(12) scale(.6)"><g class="flutter" style="animation-delay:-1s"><use href="#feather"/></g></g>
+      <g transform="translate(225,385) rotate(12) scale(.6)"><g class="flutter" style="animation-delay:-1s"><use href="#feather"/></g></g>
     </g>
     <g id="mists"></g>
     <rect x="-3000" y="-2500" width="7200" height="5600" fill="url(#vignette)"/>
@@ -252,6 +275,22 @@ body.dragging .stone.held{transition:none;cursor:grabbing}
 const SVGNS = "http://www.w3.org/2000/svg";
 const NODE_R = 22, HIT_NODE = 30, HIT_STONE = 32, SNAP = 48;
 const STORE_KEY = "tsurumi-stones-v1";
+
+/* Built-in puzzles. n: node [x,y]; e: links by node index; s: [letter, start index, target index] */
+const PUZZLES = [
+  { name: "Tide Ring", level: "easy",
+    n: [[600,500],[450,500],[525,370],[675,370],[750,500],[675,630],[525,630]],
+    e: [[1,2],[2,3],[3,4],[4,5],[5,6],[6,1],[0,1],[0,4]],
+    s: [["A",2,5],["B",3,2],["C",5,3]] },
+  { name: "Driftwood Ladder", level: "medium",
+    n: [[375,450],[525,450],[675,450],[825,450],[375,600],[525,600],[675,600],[825,600]],
+    e: [[0,1],[1,2],[2,3],[4,5],[5,6],[6,7],[0,4],[1,5],[2,6],[3,7]],
+    s: [["A",0,4],["B",1,5],["C",2,6],["D",4,0],["E",5,1],["F",6,2]] },
+  { name: "Twin Pools", level: "hard",
+    n: [[600,520],[520,420],[380,420],[310,520],[380,620],[520,620],[680,420],[820,420],[890,520],[820,620],[680,620]],
+    e: [[0,1],[1,2],[2,3],[3,4],[4,5],[5,0],[0,6],[6,7],[7,8],[8,9],[9,10],[10,0]],
+    s: [["A",2,7],["B",3,8],["C",4,9],["D",7,2],["E",8,3],["F",9,4]] }
+];
 const $ = id => document.getElementById(id);
 const svg = $("board");
 const edgesG = $("edges"), nodesG = $("nodes"), targetsG = $("targets"), stonesG = $("stones"), overlayG = $("overlay");
@@ -269,6 +308,10 @@ let history = [];
 let pointer = { x: 0, y: 0 };
 let flashMsg = null, flashTimer = null;
 let winShown = false;
+let solverWorker = null, solving = false;
+let playing = false, playTimer = null;
+let hint = null, hintTimer = null;
+let solutionCache = null; // {key, moves:[{l,to}]}
 
 /* ---------- Helpers ---------- */
 const nodeById = id => state.nodes.find(n => n.id === id);
@@ -439,6 +482,7 @@ function renderStones() {
     if (selected && selected.kind === "stone" && selected.id === s.l) c.push("sel");
     if (held) c.push("held");
     if (picking === s.l) c.push("picking");
+    if (hint && hint.l === s.l) c.push("hinted");
     g.setAttribute("class", c.join(" "));
   }
   for (const [l, g] of stoneEls) if (!seen.has(l)) { g.remove(); stoneEls.delete(l); }
@@ -460,17 +504,21 @@ function renderOverlay() {
         h += `<line class="guide" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" style="opacity:.5"/>`;
       }
     }
+  } else if (hint) {
+    const s = stoneByL(hint.l), a = s && nodeById(s.node), b = nodeById(hint.to);
+    if (a && b) h += `<line class="guide hint" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/><circle class="guide hint" cx="${b.x}" cy="${b.y}" r="30"/>`;
   }
   overlayG.innerHTML = h;
 }
 function contextHint() {
   if (mode === "config") {
     if (picking) return `Click a node to set the target for ${picking}. Esc cancels.`;
-    if (edgeStart != null) return "Right-click another node to link or unlink. Esc cancels.";
+    if (edgeStart != null) return "Release on another node to link or unlink.";
     if (!state.nodes.length) return "Double-click empty space to add a node.";
-    return "Double-click to add nodes, stones and targets. Right-click two nodes to link them. Press ? for help.";
+    return "Double-click to add nodes, stones and targets. Double-click a node and drag to link. Press ? for help.";
   }
   if (winShown) return "All stones are home.";
+  if (playing) return "Auto-solving…";
   return "Slide a stone to an empty, linked node.";
 }
 function updateHud() {
@@ -479,7 +527,10 @@ function updateHud() {
   $("cfgActions").hidden = mode !== "config";
   $("solveActions").hidden = mode !== "solve";
   $("btnDelete").disabled = !selected;
-  $("btnUndo").disabled = !history.length;
+  $("btnUndo").disabled = !history.length || playing;
+  $("btnHint").disabled = solving || playing || winShown;
+  $("btnAuto").disabled = winShown && !playing;
+  $("btnAuto").textContent = (solving || playing) ? "Stop" : "Auto-solve";
   const on = state.stones.filter(isLit).length;
   $("counts").textContent = mode === "solve"
     ? `Moves ${history.length} · Home ${on}/${state.stones.length}`
@@ -540,9 +591,13 @@ function deleteSelected() {
 function tryMove(s, to) {
   if (stoneAt(to)) { flash("That node is taken."); return false; }
   if (!hasEdge(s.node, to)) { flash("Stones can only slide along a link to a neighbour."); return false; }
+  const oldKey = posKey(), c = solutionCache;
   history.push({ l: s.l, from: s.node, to });
   s.node = to;
   selected = null;
+  hint = null;
+  if (c && c.key === oldKey && c.moves.length && c.moves[0].l === s.l && c.moves[0].to === to)
+    solutionCache = { key: posKey(), moves: c.moves.slice(1) };
   checkWin();
   return true;
 }
@@ -556,6 +611,7 @@ function checkWin() {
 }
 function setMode(m) {
   if (m === mode) return;
+  stopAuto(true); hint = null; solutionCache = null;
   if (m === "solve") {
     if (!state.stones.length) { flash("Add some stones first."); return; }
     const missing = state.stones.filter(s => s.target == null).map(s => s.l);
@@ -574,17 +630,198 @@ function setMode(m) {
   render();
 }
 function undo() {
+  if (playing) return;
   const m = history.pop();
   if (!m) return;
+  hint = null;
   stoneByL(m.l).node = m.from;
   winShown = false; $("win").hidden = true;
   render();
 }
 function resetSolve() {
+  stopAuto(true); hint = null;
   if (initial) for (const s of state.stones) s.node = initial[s.l];
   history = []; selected = null; winShown = false;
   $("win").hidden = true;
   render();
+}
+
+/* ---------- Solver (A* search, shortest solution) ---------- */
+// Pure function: also runs inside a Web Worker, so it must not use outside variables.
+function solveSearch(data, post) {
+  const { n, adj, start, goal, limit } = data;
+  const k = start.length;
+  const D = [];
+  for (let s = 0; s < n; s++) {
+    const d = new Int32Array(n).fill(-1); d[s] = 0;
+    const q = [s];
+    for (let i = 0; i < q.length; i++) { const u = q[i]; for (const v of adj[u]) if (d[v] < 0) { d[v] = d[u] + 1; q.push(v); } }
+    D.push(d);
+  }
+  let h0 = 0;
+  for (let i = 0; i < k; i++) {
+    const d = D[start[i]][goal[i]];
+    if (d < 0) { post({ status: "unsolvable" }); return; }
+    h0 += d;
+  }
+  const enc = a => String.fromCharCode.apply(null, a);
+  const goalKey = enc(goal), startKey = enc(start);
+  const info = new Map([[startKey, [0, null, -1, -1, -1]]]);
+  const closed = new Set();
+  const hf = [], hh = [], hk = [];
+  const less = (i, j) => hf[i] < hf[j] || (hf[i] === hf[j] && hh[i] < hh[j]);
+  const swap = (i, j) => {
+    let t = hf[i]; hf[i] = hf[j]; hf[j] = t;
+    t = hh[i]; hh[i] = hh[j]; hh[j] = t;
+    t = hk[i]; hk[i] = hk[j]; hk[j] = t;
+  };
+  const push = (f, h, key) => {
+    hf.push(f); hh.push(h); hk.push(key);
+    let i = hf.length - 1;
+    while (i > 0) { const p = (i - 1) >> 1; if (!less(i, p)) break; swap(i, p); i = p; }
+  };
+  const pop = () => {
+    const r = [hf[0], hh[0], hk[0]];
+    const lf = hf.pop(), lh = hh.pop(), lk = hk.pop();
+    if (hf.length) {
+      hf[0] = lf; hh[0] = lh; hk[0] = lk;
+      let i = 0;
+      for (;;) {
+        const l = 2 * i + 1, rr = l + 1; let m = i;
+        if (l < hf.length && less(l, m)) m = l;
+        if (rr < hf.length && less(rr, m)) m = rr;
+        if (m === i) break;
+        swap(i, m); i = m;
+      }
+    }
+    return r;
+  };
+  push(h0, h0, startKey);
+  let expanded = 0;
+  const occ = new Uint8Array(n);
+  while (hf.length) {
+    const [, h, key] = pop();
+    if (closed.has(key)) continue;
+    closed.add(key);
+    const g = info.get(key)[0];
+    if (key === goalKey) {
+      const moves = [];
+      let c = key;
+      for (;;) { const r = info.get(c); if (r[1] === null) break; moves.push([r[2], r[3], r[4]]); c = r[1]; }
+      moves.reverse();
+      post({ status: "solved", moves, expanded });
+      return;
+    }
+    if (++expanded > limit) { post({ status: "limit", expanded }); return; }
+    if (expanded % 100000 === 0) post({ status: "progress", expanded });
+    const pos = new Array(k);
+    for (let i = 0; i < k; i++) { pos[i] = key.charCodeAt(i); occ[pos[i]] = 1; }
+    for (let i = 0; i < k; i++) {
+      const u = pos[i];
+      for (const v of adj[u]) {
+        if (occ[v]) continue;
+        pos[i] = v; const nk = enc(pos); pos[i] = u;
+        if (closed.has(nk)) continue;
+        const ng = g + 1, old = info.get(nk);
+        if (old && old[0] <= ng) continue;
+        info.set(nk, [ng, key, i, u, v]);
+        const nh = h - D[u][goal[i]] + D[v][goal[i]];
+        push(ng + nh, nh, nk);
+      }
+    }
+    for (let i = 0; i < k; i++) occ[pos[i]] = 0;
+  }
+  post({ status: "unsolvable" });
+}
+const posKey = () => state.stones.map(s => s.l + s.node).join(",");
+function runSolver(cb) {
+  if (solving) return;
+  const key = posKey();
+  if (solutionCache && solutionCache.key === key) { cb(solutionCache.moves); return; }
+  if (solved()) { cb([]); return; }
+  const ids = state.nodes.map(n => n.id), idx = new Map(ids.map((id, i) => [id, i]));
+  const adj = ids.map(() => []);
+  for (const [a, b] of state.edges) {
+    const i = idx.get(a), j = idx.get(b);
+    if (i == null || j == null) continue;
+    adj[i].push(j); adj[j].push(i);
+  }
+  const order = state.stones.map(s => s.l);
+  const data = {
+    n: ids.length, adj, limit: 1500000,
+    start: state.stones.map(s => idx.get(s.node)),
+    goal: state.stones.map(s => idx.get(s.target))
+  };
+  solving = true;
+  flash("Thinking…");
+  const done = msg => {
+    if (!solving) return;
+    if (msg.status === "progress") { flash(`Thinking… ${Math.round(msg.expanded / 1000)}k positions checked`); return; }
+    solving = false;
+    if (solverWorker) { solverWorker.terminate(); solverWorker = null; }
+    if (msg.status === "solved") {
+      const moves = msg.moves.map(([i, , to]) => ({ l: order[i], to: ids[to] }));
+      solutionCache = { key, moves };
+      flash(`Shortest solution: ${moves.length} move${moves.length === 1 ? "" : "s"} from here.`);
+      cb(moves);
+    } else if (msg.status === "unsolvable") {
+      flash("No solution exists from this position.");
+    } else {
+      flash("This puzzle is too big for the solver.");
+    }
+    updateHud();
+  };
+  const runHere = () => setTimeout(() => solveSearch(data, done), 30);
+  try {
+    const src = `${solveSearch.toString()}\nonmessage = e => solveSearch(e.data, m => postMessage(m));`;
+    solverWorker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+    solverWorker.onmessage = e => done(e.data);
+    solverWorker.onerror = ev => { ev.preventDefault(); if (solverWorker) solverWorker.terminate(); solverWorker = null; runHere(); };
+    solverWorker.postMessage(data);
+  } catch (err) {
+    solverWorker = null;
+    runHere();
+  }
+  updateHud();
+}
+function showHint() {
+  if (playing || solving || mode !== "solve") return;
+  runSolver(moves => {
+    if (!moves.length) return;
+    hint = moves[0];
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => { hint = null; render(); }, 5000);
+    flash(`Hint: move ${hint.l}. Shortest solution from here: ${moves.length} move${moves.length === 1 ? "" : "s"}.`);
+    render();
+  });
+}
+function toggleAuto() {
+  if (playing || solving) { stopAuto(); return; }
+  if (mode !== "solve") return;
+  runSolver(moves => {
+    if (!moves.length || mode !== "solve") return;
+    playing = true; selected = null; hint = null;
+    render();
+    const step = () => {
+      if (!playing) return;
+      const c = solutionCache;
+      if (!c || c.key !== posKey() || !c.moves.length) { stopAuto(true); return; }
+      const m = c.moves[0];
+      tryMove(stoneByL(m.l), m.to);
+      if (solved()) { playing = false; render(); return; }
+      render();
+      playTimer = setTimeout(step, 550);
+    };
+    playTimer = setTimeout(step, 350);
+  });
+}
+function stopAuto(quiet) {
+  clearTimeout(playTimer);
+  const was = playing || solving;
+  playing = false;
+  if (solving) { solving = false; if (solverWorker) { solverWorker.terminate(); solverWorker = null; } }
+  if (was && !quiet) flash("Stopped.");
+  updateHud();
 }
 
 /* ---------- Share link ---------- */
@@ -619,14 +856,40 @@ function decodePuzzle(code) {
     nextId: nodes.length + 1
   };
 }
+/* In-page dialog: browser pop-ups (confirm/prompt) are blocked in sandboxed previews */
+let dlgResolve = null;
+function showDialog(text, { ok = "OK", cancel = "Cancel", value = null } = {}) {
+  return new Promise(resolve => {
+    if (dlgResolve) dlgResolve(false);
+    dlgResolve = resolve;
+    $("dlgText").textContent = text;
+    $("dlgOk").textContent = ok;
+    $("dlgCancel").textContent = cancel || "";
+    $("dlgCancel").hidden = !cancel;
+    const inp = $("dlgInput");
+    inp.hidden = value == null;
+    if (value != null) inp.value = value;
+    $("dlg").hidden = false;
+    if (value != null) { inp.focus(); inp.select(); } else $("dlgOk").focus();
+  });
+}
+function closeDialog(result) {
+  $("dlg").hidden = true;
+  const r = dlgResolve; dlgResolve = null;
+  if (r) r(result);
+}
+$("dlgOk").onclick = () => closeDialog(true);
+$("dlgCancel").onclick = () => closeDialog(false);
+$("dlg").addEventListener("pointerdown", e => { if (e.target.id === "dlg") closeDialog(false); });
+
 async function share() {
   if (!state.nodes.length) { flash("Build a puzzle first."); return; }
   const url = location.href.split("#")[0] + "#p=" + encodePuzzle();
   let ok = false;
   try { await navigator.clipboard.writeText(url); ok = true; } catch (e) {}
-  if (!ok) window.prompt("Copy this link:", url);
-  if (location.protocol === "file:") flash("Link copied. It works for others after the page is online (e.g. GitHub Pages).");
-  else flash("Link copied. It opens this puzzle in SOLVE mode.");
+  const note = location.protocol === "file:" ? " It works for others after the page is online (e.g. GitHub Pages)." : " It opens this puzzle in SOLVE mode.";
+  if (ok) flash("Link copied." + note);
+  else showDialog("Copy this link to share the puzzle." + note, { ok: "Done", cancel: null, value: url });
 }
 
 /* ---------- Input ---------- */
@@ -638,7 +901,15 @@ svg.addEventListener("pointerdown", e => {
   lastDown = dbl ? null : { t: now, p, hit };
   if (mode === "config") {
     if (picking) { handlePick(hit); lastDown = null; return; }
-    if (dbl) { onDouble(hit, p); return; }
+    if (dbl) {
+      if (hit.kind === "empty") { onDouble(hit, p); return; }
+      // Second press on a node/stone: release in place = add stone / set target; drag = link
+      drag = { hit, start: p, pos: p, moved: false, link: true };
+      try { svg.setPointerCapture(e.pointerId); } catch (err) {}
+      return;
+    }
+  } else if (playing) {
+    stopAuto();
   }
   if (hit.kind === "empty") {
     selected = null;
@@ -655,6 +926,7 @@ svg.addEventListener("pointermove", e => {
   if (!drag) { if (edgeStart != null || picking) renderOverlay(); return; }
   if (!drag.moved) {
     if (dist(p, drag.start) < 6) return;
+    if (drag.link) { drag.moved = true; edgeStart = hitNodeId(drag.hit); render(); return; }
     if (drag.hit.kind === "node" && mode !== "config") return;
     drag.moved = true;
     document.body.classList.add("dragging");
@@ -664,6 +936,7 @@ svg.addEventListener("pointermove", e => {
       if (g) stonesG.appendChild(g);
     }
   }
+  if (drag.link) { renderOverlay(); return; }
   drag.pos = p;
   if (drag.hit.kind === "node") { const n = nodeById(drag.hit.id); n.x = Math.round(p.x); n.y = Math.round(p.y); }
   render();
@@ -674,6 +947,20 @@ function endDrag(e) {
   drag = null;
   document.body.classList.remove("dragging");
   const p = toSvg(e);
+  if (d.link) {
+    const from = hitNodeId(d.hit);
+    edgeStart = null;
+    if (!d.moved) { onDouble(d.hit, p); return; }
+    const t = nodeNear(p);
+    if (t && t.id !== from) {
+      const had = hasEdge(from, t.id);
+      toggleEdge(from, t.id);
+      flash(had ? "Link removed." : "Link added.");
+      save();
+    }
+    render();
+    return;
+  }
   if (d.moved) {
     if (d.hit.kind === "stone") {
       const s = stoneByL(d.hit.id), tgt = nodeNear(p);
@@ -694,18 +981,14 @@ function endDrag(e) {
   render();
 }
 svg.addEventListener("pointerup", endDrag);
-svg.addEventListener("pointercancel", () => { drag = null; document.body.classList.remove("dragging"); render(); });
-svg.addEventListener("contextmenu", e => {
-  e.preventDefault();
-  if (mode !== "config") return;
-  const nid = hitNodeId(hitTest(toSvg(e)));
-  if (nid == null) edgeStart = null;
-  else if (edgeStart == null) edgeStart = nid;
-  else if (edgeStart === nid) edgeStart = null;
-  else { toggleEdge(edgeStart, nid); edgeStart = null; save(); }
-  render();
-});
+svg.addEventListener("pointercancel", () => { drag = null; edgeStart = null; document.body.classList.remove("dragging"); render(); });
+svg.addEventListener("contextmenu", e => e.preventDefault());
 window.addEventListener("keydown", e => {
+  if (!$("dlg").hidden) {
+    if (e.key === "Escape") closeDialog(false);
+    else if (e.key === "Enter") closeDialog(true);
+    return;
+  }
   if (e.key === "Escape") { picking = null; edgeStart = null; selected = null; $("help").hidden = true; render(); }
   else if ((e.key === "Delete" || e.key === "Backspace") && mode === "config") { e.preventDefault(); deleteSelected(); }
   else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && mode === "solve") { e.preventDefault(); undo(); }
@@ -715,12 +998,27 @@ window.addEventListener("keydown", e => {
 $("modeConfig").onclick = () => setMode("config");
 $("modeSolve").onclick = () => setMode("solve");
 $("btnDelete").onclick = deleteSelected;
-$("btnClear").onclick = () => {
-  if (!confirm("Clear the whole puzzle?")) return;
+$("btnClear").onclick = async () => {
+  if (!(await showDialog("Clear the whole puzzle?", { ok: "Clear" }))) return;
   state = { nodes: [], edges: [], stones: [], nextId: 1 };
   selected = picking = edgeStart = null;
   save(); render();
 };
+PUZZLES.forEach((pz, i) => {
+  const o = document.createElement("option");
+  o.value = i; o.textContent = `${pz.name} (${pz.level})`;
+  $("loadSel").appendChild(o);
+});
+$("loadSel").onchange = async e => {
+  const i = e.target.value;
+  e.target.value = "";
+  if (i === "") return;
+  const pz = PUZZLES[+i];
+  if (state.nodes.length && !(await showDialog(`Load "${pz.name}"? This replaces the current puzzle.`, { ok: "Load" }))) return;
+  loadPuzzle(pz);
+};
+$("btnHint").onclick = showHint;
+$("btnAuto").onclick = toggleAuto;
 $("btnUndo").onclick = undo;
 $("btnReset").onclick = resetSolve;
 $("btnShare").onclick = share;
@@ -729,18 +1027,26 @@ $("winReset").onclick = resetSolve;
 $("winClose").onclick = () => $("win").hidden = true;
 
 /* ---------- Start ---------- */
-function demoPuzzle() {
-  const cx = 600, cy = 500, R = 150, nodes = [{ id: 1, x: cx, y: cy }];
-  [180, 240, 300, 0, 60, 120].forEach((a, i) => {
-    const t = a * Math.PI / 180;
-    nodes.push({ id: i + 2, x: Math.round(cx + R * Math.cos(t)), y: Math.round(cy + R * Math.sin(t)) });
-  });
+function buildPuzzle(pz) {
   return {
-    nodes,
-    edges: [[2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 2], [1, 2], [1, 5]],
-    stones: [{ l: "A", node: 3, target: 6 }, { l: "B", node: 4, target: 3 }, { l: "C", node: 6, target: 4 }],
-    nextId: 8
+    nodes: pz.n.map(([x, y], i) => ({ id: i + 1, x, y })),
+    edges: pz.e.map(([a, b]) => [a + 1, b + 1]),
+    stones: pz.s.map(([l, n, t]) => ({ l, node: n + 1, target: t + 1 })),
+    nextId: pz.n.length + 1
   };
+}
+function loadPuzzle(pz) {
+  const wasSolve = mode === "solve";
+  stopAuto(true);
+  mode = "config";
+  initial = null; history = []; hint = null; solutionCache = null; winShown = false;
+  selected = picking = edgeStart = null;
+  $("win").hidden = true;
+  state = buildPuzzle(pz);
+  save();
+  render();
+  if (wasSolve) setMode("solve");
+  flash(`"${pz.name}" loaded.`);
 }
 function boot() {
   buildBg();
@@ -759,8 +1065,14 @@ function boot() {
     const raw = localStorage.getItem(STORE_KEY);
     if (raw) { const s = JSON.parse(raw); if (s && Array.isArray(s.nodes)) { state = s; loaded = true; } }
   } catch (e) {}
-  if (!loaded) { state = demoPuzzle(); flash("Demo puzzle loaded. Try SOLVE, or Clear to build your own."); }
+  if (!loaded) state = buildPuzzle(PUZZLES[0]);
   render();
+  if (state.stones.length && state.stones.every(s => s.target != null)) {
+    setMode("solve");
+    flash(loaded ? "Puzzle loaded. Use CONFIG to edit it." : "Demo puzzle loaded. Use CONFIG to build your own.");
+  } else {
+    flash("Finish the puzzle in CONFIG mode.");
+  }
 }
 boot();
 </script>
